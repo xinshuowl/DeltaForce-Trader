@@ -1,0 +1,425 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "name": ".357MagnumFMJ",
+      "category": "弹药",
+      "subcategory": ".357 Magnum",
+      "rarity": "紫色",
+      "price": 590
+    },
+    {
+      "name": ".357MagnumJHP",
+      "category": "弹药",
+      "subcategory": ".357 Magnum",
+      "rarity": "蓝色",
+      "price": 459
+    },
+    {
+      "name": "357Magnum9号霞射“鼠弹”",
+      "category": "弹药",
+      "subcategory": ".357 Magnum",
+      "rarity": "蓝色",
+      "price": 228
+    },
+    {
+      "name": ".357 Magnum HP",
+      "category": "弹药",
+      "subcategory": ".357 Magnum",
+      "rarity": "绿色",
+      "price": 152
+    },
+    {
+      "name": "K437突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 133529
+    },
+    {
+      "name": "M7战斗步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 208359
+    },
+    {
+      "name": "AR57突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 170651
+    },
+    {
+      "name": "ASh-12战斗步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 143976
+    },
+    {
+      "name": "MK47突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 111966
+    },
+    {
+      "name": "K416突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 122034
+    },
+    {
+      "name": "KC17突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 99511
+    },
+    {
+      "name": "ASVal突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 178111
+    },
+    {
+      "name": "M4A1突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 120668
+    },
+    {
+      "name": "AUG突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 131494
+    },
+    {
+      "name": "MCXLT突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 79474
+    },
+    {
+      "name": "AK-12突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 93417
+    },
+    {
+      "name": "SCAR-H战斗步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 111360
+    },
+    {
+      "name": "AKM突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 111162
+    },
+    {
+      "name": "腾龙突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 120177
+    },
+    {
+      "name": "SG552突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 39059
+    },
+    {
+      "name": "G3战斗步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 54707
+    },
+    {
+      "name": "QBZ95-1突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 38843
+    },
+    {
+      "name": "PTR-32突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 38228
+    },
+    {
+      "name": "CAR-15突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 12304
+    },
+    {
+      "name": "M16A4突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 12295
+    },
+    {
+      "name": "AKS-74U突击步枪",
+      "category": "枪械",
+      "subcategory": "步枪",
+      "rarity": "白色",
+      "price": 12068
+    },
+    {
+      "name": "MP7冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 219020
+    },
+    {
+      "name": "Vector冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 172085
+    },
+    {
+      "name": "P90冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 100605
+    },
+    {
+      "name": "QCQ171冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 127203
+    },
+    {
+      "name": "SR-3M紧凌突击步枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 130233
+    },
+    {
+      "name": "MK4冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 87813
+    },
+    {
+      "name": "MP5冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 52292
+    },
+    {
+      "name": "SMG-45冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 53331
+    },
+    {
+      "name": "勇士冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 50235
+    },
+    {
+      "name": "野牛冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 12101
+    },
+    {
+      "name": "UZI冲锋枪",
+      "category": "枪械",
+      "subcategory": "冲锋枪",
+      "rarity": "白色",
+      "price": 12066
+    },
+    {
+      "name": "M82狙击步枪",
+      "category": "枪械",
+      "subcategory": "狙击步枪",
+      "rarity": "白色",
+      "price": 393219
+    },
+    {
+      "name": "AWM狙击步枪",
+      "category": "枪械",
+      "subcategory": "狙击步枪",
+      "rarity": "白色",
+      "price": 823579
+    },
+    {
+      "name": "R93狙击步枪",
+      "category": "枪械",
+      "subcategory": "狙击步枪",
+      "rarity": "白色",
+      "price": 141000
+    },
+    {
+      "name": "M700狙击步枪",
+      "category": "枪械",
+      "subcategory": "狙击步枪",
+      "rarity": "白色",
+      "price": 153000
+    },
+    {
+      "name": "SV-98狙击步枪",
+      "category": "枪械",
+      "subcategory": "狙击步枪",
+      "rarity": "白色",
+      "price": 71415
+    },
+    {
+      "name": "FS-12霞弹枪",
+      "category": "枪械",
+      "subcategory": "霰弹枪",
+      "rarity": "白色",
+      "price": 83160
+    },
+    {
+      "name": "725双管霰弹枪",
+      "category": "枪械",
+      "subcategory": "霰弹枪",
+      "rarity": "白色",
+      "price": 31915
+    },
+    {
+      "name": "S12K霰弹枪",
+      "category": "枪械",
+      "subcategory": "霰弹枪",
+      "rarity": "白色",
+      "price": 42155
+    },
+    {
+      "name": "M1014霰弹枪",
+      "category": "枪械",
+      "subcategory": "霰弹枪",
+      "rarity": "白色",
+      "price": 26588
+    },
+    {
+      "name": "M870霰弹枪",
+      "category": "枪械",
+      "subcategory": "霰弹枪",
+      "rarity": "白色",
+      "price": 5000
+    },
+    {
+      "name": "M14射手步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 174050
+    },
+    {
+      "name": "SR-25射手步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 150908
+    },
+    {
+      "name": "PSG-1射手步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 124200
+    },
+    {
+      "name": "SVD狙击步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 108000
+    },
+    {
+      "name": "VSS射手步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 48488
+    },
+    {
+      "name": "杠杆式步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 59255
+    },
+    {
+      "name": "Mini-14射手步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 39668
+    },
+    {
+      "name": "SR9射手步枪",
+      "category": "枪械",
+      "subcategory": "射手步枪",
+      "rarity": "白色",
+      "price": 11250
+    },
+    {
+      "name": "M250通用机枪",
+      "category": "枪械",
+      "subcategory": "轻机枪",
+      "rarity": "白色",
+      "price": 256464
+    },
+    {
+      "name": "M249轻机枪",
+      "category": "枪械",
+      "subcategory": "轻机枪",
+      "rarity": "白色",
+      "price": 131068
+    },
+    {
+      "name": "PKM通用机枪",
+      "category": "枪械",
+      "subcategory": "轻机枪",
+      "rarity": "白色",
+      "price": 100313
+    },
+    {
+      "name": "QJB201轻机枪",
+      "category": "枪械",
+      "subcategory": "轻机枪",
+      "rarity": "白色",
+      "price": 112473
+    },
+    {
+      "name": "复合弓",
+      "category": "枪械",
+      "subcategory": "特殊武器",
+      "rarity": "白色",
+      "price": 87000
+    }
+  ]
+}

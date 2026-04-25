@@ -1,0 +1,8 @@
+{
+  "total_samples": 2247,
+  "bound_samples": 1740,
+  "unbound_samples": 507,
+  "skipped_files": 0,
+  "model_path": "E:\\Autoshop\\models\\bound_model.joblib",
+  "feature_count": 19
+}
