@@ -1,0 +1,111 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '可选: 自定义 artifact 标签 (默认使用 commit SHA)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build EXE on windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Upgrade pip / install build deps
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Show environment
+        shell: pwsh
+        run: |
+          python --version
+          pip list
+
+      - name: Run PyInstaller
+        shell: pwsh
+        run: pyinstaller DeltaForceTrader.spec --noconfirm --clean
+
+      - name: Resolve version label
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/', ''
+          } elseif ('${{ github.event.inputs.tag }}') {
+            $tag = '${{ github.event.inputs.tag }}'
+          } else {
+            $tag = 'dev-' + $env:GITHUB_SHA.Substring(0,7)
+          }
+          "VERSION=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Resolved version: $tag"
+
+      - name: Compress dist folder
+        shell: pwsh
+        run: |
+          $zip = "DeltaForceTrader-${{ steps.ver.outputs.VERSION }}-windows-x64.zip"
+          if (-not (Test-Path 'dist\DeltaForceTrader')) {
+            throw 'dist\DeltaForceTrader not found — PyInstaller output missing.'
+          }
+          Compress-Archive -Path 'dist\DeltaForceTrader\*' -DestinationPath $zip -Force
+          $size = (Get-Item $zip).Length / 1MB
+          Write-Host ("Created {0} ({1:N1} MB)" -f $zip, $size)
+          "ARTIFACT=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeltaForceTrader-${{ steps.ver.outputs.VERSION }}
+          path: ${{ env.ARTIFACT }}
+          retention-days: 30
+
+      - name: Publish GitHub Release (tag only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARTIFACT }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          name: ${{ steps.ver.outputs.VERSION }}
+          body: |
+            ## DeltaForceTrader ${{ steps.ver.outputs.VERSION }}
+
+            自动构建产物 — Windows x64
+
+            ### 下载与运行
+            1. 下载下方 `DeltaForceTrader-${{ steps.ver.outputs.VERSION }}-windows-x64.zip`
+            2. 解压到任意目录
+            3. **以管理员身份**运行 `DeltaForceTrader.exe` (按键监听需要管理员权限)
+
+            ### 首次启动
+            - 进入 "坐标校准" 页签校准坐标点位
+            - 进入 "筛选设置" 选择要上架的箱子/品质/分类
+            - Ctrl+1 开始上架, Ctrl+3 一键下架, Ctrl+2 停止
+
+            ### 系统要求
+            - Windows 10 / 11 (64-bit)
+            - 游戏分辨率 1920×1080 (其他分辨率请先标定)
+
+            > 详细使用说明见 [README.md](https://github.com/xinshuowl/DeltaForce-Trader#readme) 或主程序 "使用说明" 页签

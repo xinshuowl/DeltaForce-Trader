@@ -1,10 +1,19 @@
 # 三角洲行动 · 交易行自动上架 / 下架助手
 
+[![Build Windows Release](https://github.com/xinshuowl/DeltaForce-Trader/actions/workflows/build.yml/badge.svg)](https://github.com/xinshuowl/DeltaForce-Trader/actions/workflows/build.yml)
+[![Latest Release](https://img.shields.io/github/v/release/xinshuowl/DeltaForce-Trader?include_prereleases&label=release)](https://github.com/xinshuowl/DeltaForce-Trader/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/xinshuowl/DeltaForce-Trader/releases)
+[![Python](https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white)](https://www.python.org/)
+[![PyQt5](https://img.shields.io/badge/GUI-PyQt5-41cd52?logo=qt&logoColor=white)](https://riverbankcomputing.com/software/pyqt/)
+
 > **DELTA FORCE TRADER** — 一键把仓库里的非绑定道具批量上架到交易行，
 > 也能一键下架已上架的道具。基于 ML 模型识别 + 多层去重，**不会反复点同一道具**。
 
 支持品质 / 分类筛选、多箱子轮询挂机、坐标可视化校准。
 适合赚哈夫币挂机自动化、批量出货、清空仓库等场景。
+
+> **快速下载 →** [前往最新 Release 下载预编译 exe](https://github.com/xinshuowl/DeltaForce-Trader/releases/latest)（每次推送 `vX.Y.Z` 标签时自动构建）
 
 ---
 
