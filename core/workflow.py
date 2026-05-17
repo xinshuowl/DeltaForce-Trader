@@ -462,6 +462,46 @@ class WorkflowEngine:
                     f"  槽位依然满 ({listed}/{total}), 再等 {ocr_interval_sec}s"
                 )
 
+    def _scan_filtered_items(
+        self,
+        screenshot,
+        recently_listed_positions: set[tuple[int, int]],
+        skip_positions: set[tuple[int, int]],
+        skip_fingerprints: set[bytes],
+    ) -> tuple[list[dict], int]:
+        """ML 扫描 + 连通域合并 + 四层 skip 过滤. 复用于主循环和翻页前二次验证.
+
+        过滤逻辑 (任一命中即整组丢弃):
+          - 组内任一格在 recently_listed_positions (刚清空残影)
+          - 组内任一格在 skip_positions (已知不可上架连通块)
+          - 代表 cell 的 dHash 在 skip_fingerprints (跨页持久指纹黑名单)
+
+        Returns:
+            (kept, dropped):
+              kept    — 通过 4 层 skip 的候选列表 (每项含 _fp 指纹字段)
+              dropped — 被屏蔽的组数 (用于日志, 不影响业务)
+        """
+        raw_items = self.ml_detector.get_unbound_items(screenshot)
+        items = _merge_into_groups(raw_items)
+        if not items:
+            return items, 0
+
+        before_count = len(items)
+        kept = []
+        for it in items:
+            group = it["_group"]
+            if any(pos in recently_listed_positions for pos in group):
+                continue
+            if any(pos in skip_positions for pos in group):
+                continue
+            cell_img = _crop_cell(screenshot, it["row"], it["col"])
+            fp = _cell_fingerprint(cell_img) if cell_img is not None else None
+            if fp is not None and fp in skip_fingerprints:
+                continue
+            it["_fp"] = fp
+            kept.append(it)
+        return kept, before_count - len(kept)
+
     def _scan_and_list_box(self, box_name: str, target_count: int,
                             round_capacity: int = 0) -> int:
         """
@@ -543,55 +583,63 @@ class WorkflowEngine:
             self.auto.check_stop()
 
             screenshot = self.screen.grab_full()
-            raw_items = self.ml_detector.get_unbound_items(screenshot)
-            # 关键: 先做连通域合并, 把多 cell 大型道具 (枪/装备) 折叠成一组.
-            # 后续过滤、点击、skip 都以"组"为单位, 而不是单格.
-            items = _merge_into_groups(raw_items)
+            items, dropped = self._scan_filtered_items(
+                screenshot,
+                recently_listed_positions,
+                skip_positions,
+                skip_fingerprints,
+            )
 
             mode_tag = "ML" if self.ml_detector.is_ml_mode else "规则"
 
-            # 过滤候选道具组:
-            # 任一 cell 命中 recently_listed_positions / skip_positions → 整组跳过.
-            # 同时为代表 cell 预计算指纹挂到 item["_fp"], 后续 skip 时直接复用.
-            if items:
-                before_count = len(items)
-                kept = []
-                for it in items:
-                    group = it["_group"]
-                    if any(pos in recently_listed_positions for pos in group):
-                        continue
-                    if any(pos in skip_positions for pos in group):
-                        continue
-                    cell_img = _crop_cell(screenshot, it["row"], it["col"])
-                    fp = _cell_fingerprint(cell_img) if cell_img is not None else None
-                    if fp is not None and fp in skip_fingerprints:
-                        continue
-                    it["_fp"] = fp
-                    kept.append(it)
-                items = kept
-                dropped = before_count - len(items)
-                if dropped > 0:
-                    self._status(
-                        f"  跳过 {dropped} 组已处理道具 "
-                        f"(待上架 {len(items)} 组 / "
-                        f"位置 {len(skip_positions)} / "
-                        f"指纹 {len(skip_fingerprints)} / "
-                        f"名字 {len(skip_names)})"
-                    )
+            if dropped > 0:
+                self._status(
+                    f"  跳过 {dropped} 组已处理道具 "
+                    f"(待上架 {len(items)} 组 / "
+                    f"位置 {len(skip_positions)} / "
+                    f"指纹 {len(skip_fingerprints)} / "
+                    f"名字 {len(skip_names)})"
+                )
 
             if not items:
-                # 位置类集合翻页清空 (新页面 (row, col) 含义变了).
-                # 指纹/名字集合保留 — 它们与位置无关, 跨页继续生效.
-                recently_listed_positions.clear()
-                skip_positions.clear()
-                self._status("  当前页无候选, 翻页...")
-                # 滚动前留下当前网格快照, 滚动后做双重到底确认
-                if _check_bottom(screenshot):
-                    self._status("  已到达箱子底部 (双重确认), 结束扫描")
-                    break
-                scroll_count += 1
-                empty_scans += 1
-                continue
+                # ─── 翻页前二次扫描验证 (方案 A) ──────────────────────
+                # 首次 ML 扫描为空时, **不立即**翻页:
+                #   等 0.3s (覆盖滚动残帧 / 悬浮 tooltip 自动消失) → 再扫一次.
+                # 实测 ML 在以下场景偶发漏判:
+                #   - 道具图标边缘被网格区裁掉 (置信度刚好低于 0.5)
+                #   - 上次操作的 hover 框尚未完全淡出
+                #   - 道具高亮闪烁动画的帧间空白
+                # 二次扫描成本: ~一次 grab_full + ML 推理 ≈ 0.35s
+                # 收益: 一旦避免一次错误翻页, 省 ~3-5s (翻过去就回不来的道具
+                #       要等下次循环回顶部, 才有机会处理).
+                self.auto.wait(0.30)
+                screenshot_v2 = self.screen.grab_full()
+                items_v2, _dropped_v2 = self._scan_filtered_items(
+                    screenshot_v2,
+                    recently_listed_positions,
+                    skip_positions,
+                    skip_fingerprints,
+                )
+                if items_v2:
+                    self._status(
+                        f"  二次扫描发现 {len(items_v2)} 组候选 "
+                        f"(首次扫描漏判, 取消翻页)"
+                    )
+                    screenshot = screenshot_v2
+                    items = items_v2
+                    # 落到下方上架循环 (不 continue, 不 scroll)
+                else:
+                    # 真空, 翻页. 位置类集合翻页清空 (新页面 (row,col) 含义变了),
+                    # 指纹/名字集合保留 — 它们与位置无关, 跨页继续生效.
+                    recently_listed_positions.clear()
+                    skip_positions.clear()
+                    self._status("  当前页无候选 (两次扫描确认), 翻页...")
+                    if _check_bottom(screenshot):
+                        self._status("  已到达箱子底部 (双重确认), 结束扫描")
+                        break
+                    scroll_count += 1
+                    empty_scans += 1
+                    continue
 
             empty_scans = 0
             listed_this_scan = False
@@ -860,13 +908,16 @@ class WorkflowEngine:
     # 这里取 2.5 稳妥, 只要不是明显静止就让外层继续滚.
     _GRID_BOTTOM_DIFF_THRESHOLD = 2.5
 
-    # 单次翻页的滚轮刻度量:
-    # - 值越大 = 一次翻得越远, 扫完整箱所需迭代次数越少 (用户感知更快)
-    # - 由于游戏常把连续滚轮事件合并, 并非 1 刻度=1 行; 实测 144 刻度约覆盖
-    #   2~3 屏内容, 对 450 格的大箱子基本 3~4 轮就能扫完.
-    # - 配合外层双重确认, 即使"过冲越过少量道具"的情况也靠 recently_listed
-    #   跟踪和下一轮扫描的重叠视野补回来.
-    _SCROLL_AMOUNT = 144  # = visible_rows * 12
+    # 单次翻页的滚轮刻度量 (重叠滚动策略):
+    # - 96 刻度 ≈ 1.5 屏内容, 相邻两次滚动保留 ~25-33% 视野重叠.
+    # - 重叠的意义: ML 偶发漏判 (置信度边缘/边角裁切/动画残帧) 时, 漏掉的
+    #   道具会在下一次滚动后落入新视野上半部, 被补扫到. 不依赖回滚.
+    # - 重叠由 skip_fingerprints / skip_positions 跨页保留兜底, 不会重复点击.
+    # - 之前 144 刻度 (~2.5 屏, 0 重叠) 翻页过急, 一旦 ML 漏判该道具就被
+    #   滚到视野外, 整箱循环结束才能找回, 损失 3-5s/件.
+    # - 翻页次数从 N → ~N*1.5, 但避免一次漏点的代价 (3-5s) 远大于 1 次额外
+    #   翻页的开销 (~0.4s).
+    _SCROLL_AMOUNT = 96
 
     # 滚动后等待 UI 稳定的时间 (秒):
     # - 0.35 太保守, 用户体感明显卡顿
