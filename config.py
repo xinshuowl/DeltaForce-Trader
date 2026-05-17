@@ -332,13 +332,21 @@ def save_user_config(config: dict):
 #   (cfg_dict, sub_key)           : cfg_dict[sub_key] = value  (简单值)
 #   (cfg_dict, sub_key, idx)      : cfg_dict[sub_key][idx] = value  (元组/列表某位)
 COORD_KEY_MAP = {
-    # --- 道具网格 ---
+    # --- 道具网格 (滚动范围/区域判定) ---
     "grid_x_start": (ITEM_GRID, "x_start"),
     "grid_y_start": (ITEM_GRID, "y_start"),
     "grid_x_end":   (ITEM_GRID, "x_end"),
     "grid_y_end":   (ITEM_GRID, "y_end"),
     "scroll_area_x": (ITEM_GRID, "scroll_area_x"),
     "scroll_area_y": (ITEM_GRID, "scroll_area_y"),
+
+    # --- 单元格精确坐标 (审核标注 / ML 检测 / 上架点击 共用) ---
+    # 注: ITEM_GRID 只用于"滚动区/范围判定", 真正决定切到哪一格、点哪一格
+    # 的是 CELL_GRID. 之前 GUI 漏了这 4 个字段, 改 ITEM_GRID 完全不影响切图.
+    "cell_origin_x": (CELL_GRID, "origin_x"),
+    "cell_origin_y": (CELL_GRID, "origin_y"),
+    "cell_w":        (CELL_GRID, "cell_w"),
+    "cell_h":        (CELL_GRID, "cell_h"),
 
     # --- 上架弹窗按钮 ---
     "qty_plus_x":     (LIST_DIALOG, "qty_plus_btn", 0),

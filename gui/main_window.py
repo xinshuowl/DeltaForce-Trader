@@ -19,7 +19,7 @@ from PyQt5.QtGui import QColor, QPixmap, QPainter, QPen
 
 from config import (
     ITEM_CATEGORIES, STORAGE_BOXES, MAX_STORAGE_BOXES, Rarity,
-    ITEM_GRID, BOX_SELECTOR, LIST_DIALOG, ORGANIZE_BTN,
+    ITEM_GRID, CELL_GRID, BOX_SELECTOR, LIST_DIALOG, ORGANIZE_BTN,
     LISTED_ITEMS, LISTING_SLOTS, TAB_COORDS, DETECTION_ROI, HOTKEYS,
     apply_saved_coordinates,
     load_user_config, save_user_config,
@@ -296,13 +296,20 @@ class ClickableImageLabel(QLabel):
 #   - region 类型: 按住鼠标左键拖一个框, 四个值分别填入四个 SpinBox
 # 拾取完成后自动跳到下一个目标, 方便一次性校准所有字段.
 PICK_TARGETS: list[tuple[str, str, str, tuple[str, ...]]] = [
-    # === 道具网格 ===
+    # === 道具网格 (滚动范围/区域判定) ===
     ("point",  "grid_start",     "网格左上角 (X起, Y起)",
         ("grid_x_start", "grid_y_start")),
     ("point",  "grid_end",       "网格右下角 (X终, Y终)",
         ("grid_x_end", "grid_y_end")),
     ("point",  "scroll_area",    "网格滚动停鼠点",
         ("scroll_area_x", "scroll_area_y")),
+
+    # === 单元格基准 (审核标注 / ML 检测 / 上架点击 共用) ===
+    # 拾取顺序: 先 R0C0 左上 → 再 R11C8 右下, 后者会自动算出 cell_w/cell_h.
+    ("point",  "cell_r0c0",      "★ 第1格 R0C0 左上角 (审核/上架基准)",
+        ("cell_origin_x", "cell_origin_y")),
+    ("point",  "cell_corner",    "★ 最末可见格 R11C8 右下角 (算cell尺寸)",
+        ("__cell_corner_x", "__cell_corner_y")),
 
     # === 上架弹窗 — 按钮 ===
     ("point",  "qty_minus",      "数量 − 按钮",
@@ -1428,8 +1435,8 @@ class MainWindow(QMainWindow):
         # 一、点击坐标
         # ═════════════════════════════════════════════════════
 
-        # --- 道具网格 ---
-        grid_group = QGroupBox("道具网格 (出售界面右侧)")
+        # --- 道具网格 (滚动范围/区域判定) ---
+        grid_group = QGroupBox("道具网格 — 滚动范围 / 区域判定")
         g = QGridLayout(grid_group)
         self._add_point_row(g, 0, "网格左上",
             "grid_x_start", "grid_y_start",
@@ -1442,6 +1449,32 @@ class MainWindow(QMainWindow):
             ITEM_GRID.get("scroll_area_x", 2060),
             ITEM_GRID.get("scroll_area_y", 700))
         layout.addWidget(grid_group)
+
+        # --- 单元格基准 (审核标注 / ML 检测 / 上架点击 共用) ---
+        cell_group = QGroupBox(
+            "单元格基准 ★ — 审核标注 / ML 检测 / 上架点击 共用此坐标"
+        )
+        cg = QGridLayout(cell_group)
+        # R0C0 左上角 = 第一格的左上角像素
+        self._add_point_row(cg, 0, "R0C0 左上",
+            "cell_origin_x", "cell_origin_y",
+            CELL_GRID["origin_x"], CELL_GRID["origin_y"])
+        # cell_w / cell_h: 用 "宽/高" 标注, 不是坐标
+        cg.addWidget(QLabel("单格宽度  W"), 1, 0)
+        cg.addWidget(self._make_spin("cell_w", CELL_GRID["cell_w"], 500), 1, 1)
+        cg.addWidget(QLabel("H"), 1, 2)
+        cg.addWidget(self._make_spin("cell_h", CELL_GRID["cell_h"], 500), 1, 3)
+        # 信息提示
+        cell_info = QLabel(
+            f'<span style="color:{TEXT_SECONDARY};font-size:11px;">'
+            f'拾取方式: 截图 → 选 <b>"R0C0 左上角"</b> 单击第一格左上 → 再选 '
+            f'<b>"R11C8 右下角"</b> 单击右下角, 自动算出 cell_w/cell_h '
+            f'(固定 9 列 × 12 可见行).'
+            f'</span>'
+        )
+        cell_info.setWordWrap(True)
+        cg.addWidget(cell_info, 2, 0, 1, 4)
+        layout.addWidget(cell_group)
 
         # --- 上架弹窗按钮 ---
         dialog_group = QGroupBox("上架弹窗按钮 (点击道具后的界面)")
@@ -1723,7 +1756,42 @@ class MainWindow(QMainWindow):
         keys 和 values 是一一对应的等长元组:
           - point:  keys=(x_key, y_key), values=(x, y)
           - region: keys=(x1, y1, x2, y2), values=(x1, y1, x2, y2)
+
+        特殊处理:
+          - "__cell_corner_x/y" 不直接对应 SpinBox; 拾取 R11C8 右下角后,
+            联立 cell_origin_x/y 计算 cell_w / cell_h 并写入对应 spin.
         """
+        # 特殊键 — 单元格右下角拾取触发 cell_w/cell_h 自动计算
+        if "__cell_corner_x" in keys and "__cell_corner_y" in keys:
+            kv = dict(zip(keys, values))
+            corner_x = int(kv["__cell_corner_x"])
+            corner_y = int(kv["__cell_corner_y"])
+
+            origin_x = self._coord_spins["cell_origin_x"].value()
+            origin_y = self._coord_spins["cell_origin_y"].value()
+            from config import CELL_GRID
+            cols = CELL_GRID.get("cols", 9)
+            rows = CELL_GRID.get("visible_rows", 12)
+
+            if corner_x <= origin_x or corner_y <= origin_y:
+                QMessageBox.warning(
+                    self, "拾取顺序错误",
+                    "右下角必须在 R0C0 左上角 (cell_origin) 的右下方.\n"
+                    "请先拾取「第1格 R0C0 左上角」, 再拾取本目标."
+                )
+                return
+
+            cell_w = max(1, round((corner_x - origin_x) / cols))
+            cell_h = max(1, round((corner_y - origin_y) / rows))
+            self._coord_spins["cell_w"].setValue(int(cell_w))
+            self._coord_spins["cell_h"].setValue(int(cell_h))
+            self.statusBar().showMessage(
+                f"单元格尺寸已计算: cell_w={cell_w}, cell_h={cell_h} "
+                f"(基于 R0C0=({origin_x},{origin_y}) 到 R{rows-1}C{cols-1}右下=({corner_x},{corner_y}))"
+            )
+            return
+
+        # 常规路径: 按 key 写到 spin
         for key, val in zip(keys, values):
             if key in self._coord_spins:
                 self._coord_spins[key].setValue(int(val))
