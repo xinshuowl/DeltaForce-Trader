@@ -504,12 +504,27 @@ class WorkflowEngine:
 
     def _scan_and_list_box(self, box_name: str, target_count: int,
                             round_capacity: int = 0) -> int:
-        """
-        扫描一个箱子, 按从左到右、从上到下的顺序逐个尝试上架.
-        每次成功上架后回到出售界面会重新扫描 (因为上架后物品消失, 网格坐标变化).
+        """扫描一个箱子, 严格按 (row, col) 升序逐个尝试上架.
 
-        关键: 上架一种道具会一次清除该道具的所有实例 (如密令斜角 x5 → 5格变空),
-        必须等页面完全刷新后再重新扫描, 并跳过刚清空的位置.
+        ─── 顺序保证 (从左到右、从上到下) ─────────────────────────────
+        1. ml_detector.iter_cells 外层 row 内层 col → 返回顺序天然
+           "从上到下、从左到右"
+        2. _merge_into_groups 用 sorted(cells.keys()) 升序遍历, 代表 cell
+           取 group 最左上 (row, col 字典序最小) → 输出 representatives
+           列表按 (row, col) 升序
+        3. 主 for 循环按列表顺序遍历, 每件成功上架后 break + 重扫
+           (会再次按升序排) → 永远从可见的最左上非绑定开始
+        4. 翻页只在两种情况发生:
+             a) 当前页 ML 扫不到任何候选, 且二次扫描 (方案 A) 仍空
+             b) for 循环走完没有任何件上架成功, 且严格清零验证 (临时禁用
+                指纹 skip) 也找不到候选
+           → 保证 "当前页可上架的都试过" 才翻页
+
+        ─── 关键事实 ────────────────────────────────────────────────
+        - 上架一种道具会一次清除该道具的所有实例 (密令斜角 x5 → 5 格变空);
+          必须等页面完全刷新后再重新扫描, 跳过刚清空的位置
+        - "点击无反应" 只屏蔽本页位置 (skip_positions), 不再加跨页指纹屏蔽,
+          避免偶发卡顿导致道具被永久屏蔽
 
         Args:
             target_count:    本轮累计上架目标 (绝对值, _listed_count 触达即停).
@@ -558,6 +573,13 @@ class WorkflowEngine:
         # 连续两次候选才真正判定到底并 break. 避免滚动动画未结束导致的
         # 单次假阳性让扫描提前终止.
         bottom_candidate = False
+
+        # 严格清零验证: 用户要求 "从左到右、从上到下依次上架成功后再翻页".
+        # 当 for 循环走完没有任何件上架成功 (listed_this_scan=False, 全部被
+        # skip 屏蔽了) 时, 不立即翻页 — 临时禁用 skip_fingerprints 再扫一次,
+        # 给被指纹误屏蔽的道具一次解救机会. 同页最多重试 2 次防死循环.
+        strict_retry_count = 0
+        strict_retry_limit = 2
 
         def _check_bottom(pre_shot):
             """滚动并做到底判定 (双重确认).
@@ -680,14 +702,19 @@ class WorkflowEngine:
 
                 if not page_changed:
                     skipped += 1
-                    # 整个连通块位置全部加入 skip — 同一道具的所有 cell 一并
-                    # 屏蔽, 避免 ML 扫到组内其它格子时又点开.
+                    # 整个连通块位置加入 skip_positions (本页屏蔽),
+                    # 避免 ML 扫到组内其它格子时又点开.
                     skip_positions.update(item["_group"])
-                    if item.get("_fp") is not None:
-                        skip_fingerprints.add(item["_fp"])
+                    # 重要变更: "无反应" **不再**加跨页指纹屏蔽.
+                    # 之前的逻辑会把偶发卡顿误判为 "永久不可点击", 该道具
+                    # 整个箱子内再也点不到, 用户体感 "明明能上架却被漏掉".
+                    # 现在只本页屏蔽, 翻页时 skip_positions 清空 → 下次扫到
+                    # 仍会被尝试. 如果真是 ML 误判 / 道具有问题, 下次同样
+                    # 无反应再 skip 本页, 不会死循环.
                     self._status(
                         f"  -> 跳过 R{item['row']}C{item['col']} "
-                        f"(无反应, 累计 {skipped}, 整组 {len(item['_group'])} 格)"
+                        f"(无反应, 累计 {skipped}, 整组 {len(item['_group'])} 格 / "
+                        f"仅本页屏蔽)"
                     )
                     continue
 
@@ -877,10 +904,40 @@ class WorkflowEngine:
                 break
 
             if not listed_this_scan:
+                # ─── 翻页前 "严格清零验证" ────────────────────────────
+                # 用户需求: 当前页 "依次上架成功后再翻页", 不能因 skip 误伤
+                # 让能上架的道具被漏掉.
+                # 触发条件: for 循环走完一件都没上架 (全 skip).
+                # 策略: 等 0.3s → 临时禁用 skip_fingerprints 再扫一次.
+                #   - 仍有候选 -> 清掉指纹 skip, 重置重试计数, continue 重扫
+                #   - 真没了    -> 翻页, 重置 retry 计数
+                # 上限: 同页 strict_retry_limit=2 次, 防止指纹被反复清后死循环.
+                if strict_retry_count < strict_retry_limit:
+                    self.auto.wait(0.30)
+                    screenshot_strict = self.screen.grab_full()
+                    items_strict, _ = self._scan_filtered_items(
+                        screenshot_strict,
+                        recently_listed_positions,
+                        skip_positions,   # 本页位置 skip 保留 (避免反复点同位置)
+                        set(),            # 临时禁用指纹 skip 看会不会救出道具
+                    )
+                    if items_strict:
+                        strict_retry_count += 1
+                        n_recovered = len(skip_fingerprints)
+                        skip_fingerprints.clear()
+                        self._status(
+                            f"  ⚠ 严格清零验证 #{strict_retry_count}: 解除 "
+                            f"{n_recovered} 个指纹屏蔽后发现 {len(items_strict)} "
+                            f"组候选, 取消翻页, 重新扫描"
+                        )
+                        continue
+
+                # 真翻页: 重置严格重试计数 (新页面是新机会)
+                strict_retry_count = 0
                 recently_listed_positions.clear()
                 skip_positions.clear()
                 # skip_fingerprints / skip_names 跨页保留, 不清空
-                self._status("  当前页无可上架道具, 翻页...")
+                self._status("  当前页无可上架道具 (严格验证后翻页)...")
                 if _check_bottom(screenshot):
                     self._status("  已到达箱子底部 (双重确认), 结束扫描")
                     break
@@ -888,6 +945,8 @@ class WorkflowEngine:
             else:
                 # 本轮成功上架过 -> 重置到底候选 (页面已变化, 旧的候选失效)
                 bottom_candidate = False
+                # 上架成功也重置严格重试计数 (本页有进展, 重新计数)
+                strict_retry_count = 0
                 # 注意: 不符筛选的道具仍然不符筛选, skip_* 系列保留.
 
         if empty_scans >= empty_scans_limit:
