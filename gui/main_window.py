@@ -1565,6 +1565,28 @@ class MainWindow(QMainWindow):
             DETECTION_ROI["sell_tab"])
         layout.addWidget(region_group)
 
+        # --- 区域自检: sell_tab 亮度实时预览 ---
+        # 用于解决 P2-8: 用户校准坐标后, 无需启动上架就能验证 sell_tab ROI
+        # 是否能正确读到 "出售页高亮" 的亮度 (阈值 >= 35).
+        selftest_group = QGroupBox("区域自检")
+        st_layout = QHBoxLayout(selftest_group)
+        btn_test_tab = QPushButton("测试 出售 tab 亮度")
+        set_btn_style(btn_test_tab, NEON_PURPLE)
+        btn_test_tab.setToolTip(
+            "立即截取当前屏幕的出售 tab ROI 并计算灰度均值. "
+            "请先在游戏内停留在 交易行→出售 页面, 再点此按钮. "
+            "阈值: 亮度 >= 35 视为在出售页 (高亮选中状态)."
+        )
+        btn_test_tab.clicked.connect(self._test_sell_tab_brightness)
+        st_layout.addWidget(btn_test_tab)
+        self.sell_tab_brightness_label = QLabel(
+            "  (尚未测试) — 先在游戏中切到 出售 tab, 再点左侧按钮"
+        )
+        self.sell_tab_brightness_label.setTextFormat(Qt.RichText)
+        self.sell_tab_brightness_label.setWordWrap(True)
+        st_layout.addWidget(self.sell_tab_brightness_label, 1)
+        layout.addWidget(selftest_group)
+
         # --- 应用 + 重置按钮 ---
         btn_row = QHBoxLayout()
         btn_apply = QPushButton("应用所有坐标修改 (永久保存)")
@@ -1717,6 +1739,65 @@ class MainWindow(QMainWindow):
     def _apply_coords_to_globals(self):
         """将当前 SpinBox 值同步到全局配置字典 (运行时生效)"""
         apply_saved_coordinates(self._collect_coord_values())
+
+    def _test_sell_tab_brightness(self):
+        """实时测试 出售 tab ROI 的灰度均值, 帮用户校准坐标.
+
+        - 直接读 spin 当前值 (允许未保存测试)
+        - 调用 screen.grab_region 抓 ROI → 灰度均值
+        - 阈值 35: 出售页通常 50+, 暗蒙版/弹窗 < 25
+        """
+        import cv2
+        from core.workflow import WorkflowEngine as _WE  # 仅获取阈值常量
+
+        try:
+            x1 = self._coord_spins["sell_tab_x1"].value()
+            y1 = self._coord_spins["sell_tab_y1"].value()
+            x2 = self._coord_spins["sell_tab_x2"].value()
+            y2 = self._coord_spins["sell_tab_y2"].value()
+        except KeyError as e:
+            self.sell_tab_brightness_label.setText(
+                f'<span style="color:{NEON_RED};">缺少坐标键: {e}</span>'
+            )
+            return
+
+        if x2 <= x1 or y2 <= y1:
+            self.sell_tab_brightness_label.setText(
+                f'<span style="color:{NEON_RED};">'
+                f'坐标无效 (X2={x2}<=X1={x1} 或 Y2={y2}<=Y1={y1})'
+                f'</span>'
+            )
+            return
+
+        try:
+            roi = self.engine.screen.grab_region(x1, y1, x2, y2)
+            if roi is None or roi.size == 0:
+                raise RuntimeError("grab_region 返回空")
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            brightness = float(gray.mean())
+        except Exception as e:
+            self.sell_tab_brightness_label.setText(
+                f'<span style="color:{NEON_RED};">截图失败: {e}</span>'
+            )
+            return
+
+        threshold = _WE._SELL_TAB_BRIGHTNESS_THRESHOLD
+        if brightness >= threshold:
+            color = NEON_GREEN
+            verdict = "✓ 当前位于 出售 页 (高亮选中)"
+        else:
+            color = NEON_RED
+            verdict = (
+                "✗ 当前不在 出售 页 / 坐标可能偏离 "
+                "(请先在游戏内切到 交易行→出售)"
+            )
+
+        self.sell_tab_brightness_label.setText(
+            f'  ROI=({x1},{y1})-({x2},{y2}) | '
+            f'亮度 <b style="color:{color};font-size:14px;">{brightness:.1f}</b> '
+            f'(阈值 ≥ {threshold:.0f}) — '
+            f'<span style="color:{color};">{verdict}</span>'
+        )
 
     def _apply_coord_changes(self):
         """应用坐标修改: 同步到全局字典 + 永久保存到 user_config.json"""

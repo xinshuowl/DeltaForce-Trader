@@ -153,6 +153,10 @@ class WorkflowEngine:
         self._on_progress = on_progress or (lambda c, t: None)
         self._listed_count = 0
         self._listing_records: list[ListingRecord] = []
+        # 独立单调递增的截图序号: 保证每张弹窗截图文件名唯一,
+        # 即使本件最终因 "未回到出售页" 失败 (record 不写入), 截图也不会
+        # 被下一件成功上架的截图覆盖. 用作 listings/listing_*.png 的后缀.
+        self._screenshot_seq = 0
 
     def _status(self, msg: str):
         self._on_status(msg)
@@ -237,6 +241,7 @@ class WorkflowEngine:
         self.auto.resume()
         self._listed_count = 0
         self._listing_records.clear()
+        self._screenshot_seq = 0
         total_boxes = len(selected_boxes)
         rarity_names = [r.value for r in selected_rarities]
 
@@ -289,29 +294,32 @@ class WorkflowEngine:
         total_boxes = len(selected_boxes)
         round_start_count = self._listed_count
 
-        # 尝试 OCR 检测当前上架数量 (可能不准, 最多重试 3 次避免偶发误读)
+        # 尝试 OCR 检测当前上架数量. _reliable 内部已经重试 3 次,
+        # 全部读到 "已满" 时高置信度认为真的满了 — 无需再做单次二次确认
+        # (单读 1 次在同一像素帧下结论会一样, 形同 sleep).
         already_listed, total_slots, remaining = self._detect_listing_status_reliable()
         if remaining == 0:
-            # 首次读到 0 再额外确认一次, 避免 "0/15" 被误读成 "15/15"
-            self._status("OCR 显示槽位已满, 二次确认中...")
-            time.sleep(0.4)
-            _l, _t, remaining2 = self._detect_listing_status()
-            if remaining2 == 0:
-                self._status("槽位已满, 无法继续上架! 请先下架部分道具.")
-                return 0
-            remaining = remaining2
-        # 本轮最多上架 = 当前剩余槽位 + 本轮已经累计的上架数
-        # (因为 _listed_count 会在每件上架后 +1, 需跟 max_slots 对齐)
-        round_max_slots = self._listed_count + (remaining if remaining > 0 else max_slots)
+            self._status(
+                f"OCR 三次重试均显示槽位已满 ({already_listed}/{total_slots}), "
+                f"请先下架部分道具"
+            )
+            return 0
+
+        # round_capacity: 本轮**还能上架几件** (相对值, 更直观)
+        # OCR 失败 (-1) 时回退到用户配置的 max_slots
+        round_capacity = remaining if remaining > 0 else max_slots
+        round_target_count = self._listed_count + round_capacity  # 累计上架目标
         self._status(
-            f"本轮最多上架 {round_max_slots - self._listed_count} 件 "
+            f"本轮最多上架 {round_capacity} 件 "
             f"(OCR 识别失败时默认 {max_slots})"
         )
 
         if organize_first:
             self._status("步骤1: 整理仓库...")
             self.auto.click_organize_storage()
-            time.sleep(0.3)
+            # 整理仓库的滑动动画约 0.6~1.2s, 之前 0.3s 偶尔点空 sort 按钮.
+            # 0.8s 是实测兼容性最好的折中.
+            time.sleep(0.8)
             self.auto.click_sort_button()
             self._status("  仓库整理完成")
 
@@ -325,11 +333,17 @@ class WorkflowEngine:
                 continue
 
             self.auto.click_box_selector(storage_index, BOX_SELECTOR)
-            listed_in_box = self._scan_and_list_box(box_name, round_max_slots)
+            # 切换箱子有 ~0.4s 滑动动画, 不等的话第一次 grab_full 会抓到
+            # 旧箱子内容 → ML 跑出旧道具 → 点击发现已切换 → 走 skip 路径,
+            # 浪费 ~1s. 这里固定 wait 0.45s, 让 UI 稳定后再扫.
+            self.auto.wait(0.45)
+            listed_in_box = self._scan_and_list_box(
+                box_name, round_target_count, round_capacity
+            )
             self._status(f"  {box_name}: 上架了 {listed_in_box} 件")
 
-            if self._listed_count >= round_max_slots:
-                self._status(f"已达上架上限 ({round_max_slots})")
+            if self._listed_count >= round_target_count:
+                self._status(f"已达本轮上架上限 ({round_capacity} 件)")
                 break
 
         return self._listed_count - round_start_count
@@ -448,25 +462,37 @@ class WorkflowEngine:
                     f"  槽位依然满 ({listed}/{total}), 再等 {ocr_interval_sec}s"
                 )
 
-    def _scan_and_list_box(self, box_name: str, max_slots: int) -> int:
+    def _scan_and_list_box(self, box_name: str, target_count: int,
+                            round_capacity: int = 0) -> int:
         """
         扫描一个箱子, 按从左到右、从上到下的顺序逐个尝试上架.
         每次成功上架后回到出售界面会重新扫描 (因为上架后物品消失, 网格坐标变化).
 
         关键: 上架一种道具会一次清除该道具的所有实例 (如密令斜角 x5 → 5格变空),
         必须等页面完全刷新后再重新扫描, 并跳过刚清空的位置.
+
+        Args:
+            target_count:    本轮累计上架目标 (绝对值, _listed_count 触达即停).
+            round_capacity:  本轮总容量 (用于进度回调的分母, 仅显示用途, 0=按 max_slots).
         """
         listed = 0
         skipped = 0
         scroll_count = 0
         max_scroll = 30
         empty_scans = 0
+        # 进度回调的分母: 优先用本轮容量 (跟 OCR 读到的剩余槽位一致),
+        # OCR 失败时回退用 target_count - 起始计数, 始终保证 progress 不会
+        # 出现 "上完了进度条只到 33%" 这种奇怪表现.
+        round_listed_start = self._listed_count
+        progress_total = round_capacity if round_capacity > 0 else max(
+            1, target_count - round_listed_start
+        )
         # 连续 N 次空扫描后退出. 提升到 6 是为了覆盖 "顶部几页全绑定 / 全不在
         # 筛选范围" 的箱子 — 之前 2 太短会直接误判成空箱提前跳下一个.
         # 真正到底的箱子靠 _scroll_and_at_bottom 的双重确认提前 break, 不会
         # 因为 empty_scans_limit 大而拖慢空箱处理.
         empty_scans_limit = 6
-        # 三层 skip 机制. 依次失效时由下一层兜底, 互相补充:
+        # 四层 skip 机制 (从弱到强, 依次失效时由下一层兜底, 互相补充):
         #
         # 1) recently_listed_positions: 刚上架的格子残影 (本轮扫描内有效, 翻页清空).
         #    上架成功后页面尚未刷新, ML 可能仍把空格判为非绑定, 用位置临时屏蔽.
@@ -572,7 +598,7 @@ class WorkflowEngine:
 
             for item in items:
                 self.auto.check_stop()
-                if self._listed_count >= max_slots:
+                if self._listed_count >= target_count:
                     return listed
 
                 conf_str = f" conf={item['confidence']:.0%}" if self.ml_detector.is_ml_mode else ""
@@ -625,7 +651,10 @@ class WorkflowEngine:
                 self.auto.maximize_quantity(
                     clicks=TIMING.get("maximize_clicks", 1)
                 )
-                self.auto.wait(0.12)
+                # 数量框文本渲染需要 ~0.18-0.20s 才完全稳定. 0.12s 偏短,
+                # 偶尔会抓到 "动画中" 帧 (数量还停留在初值, OCR 读到的
+                # 收入因此偏低). 抬到 0.22s 实测对总耗时影响 < 1%.
+                self.auto.wait(0.22)
 
                 info_screenshot = self.screen.grab_full()
 
@@ -633,8 +662,14 @@ class WorkflowEngine:
                     self.detector.read_dialog_info, info_screenshot
                 )
 
-                record_idx = len(self._listing_records) + 1
-                shot_path = f"listings/listing_{record_idx:03d}.png"
+                # 独立单调递增序号 + 时间戳 → 文件名永不重复.
+                # 哪怕本件在后续 "回出售页" 判定中失败 (不写入 record),
+                # 截图也保留为独立文件, 便于事后排错.
+                self._screenshot_seq += 1
+                shot_path = (
+                    f"listings/listing_{self._screenshot_seq:04d}"
+                    f"_{time.strftime('%H%M%S')}.png"
+                )
                 panel = self.detector.crop_dialog_panel(info_screenshot)
                 save_debug_screenshot(panel, shot_path)
 
@@ -664,6 +699,10 @@ class WorkflowEngine:
                             f"  ✗ R{item['row']}C{item['col']} "
                             f"[{name}] {tag}, 跳过"
                         )
+                        # 我们已经拿到 info 不再需要这个 future 的结果, 取消它
+                        # (实测多数情况已 done, cancel 无操作; 偶尔未完成时
+                        #  释放 OCR 线程, 让下一件能立即并行启动).
+                        ocr_future.cancel()
                         self.auto.press_key("escape")
                         self.auto.wait(0.6)
                         skipped += 1
@@ -704,7 +743,10 @@ class WorkflowEngine:
                 #   (3) 大 stack 清空的正常上架 (tab 栏可见 → Slow path 通过)
                 page_after_confirm = False
                 current_feat = None
-                for wait_ms in (0.4, 0.35, 0.3):
+                # 等待序列 (0.25, 0.35, 0.5) — 总等同 1.10s, 但首次更早探测:
+                # 常规上架界面在 ~0.2s 内就回到出售页, 0.25 比 0.4 早出 150ms,
+                # 慢机器靠后两次 0.35+0.5 兜底.
+                for wait_ms in (0.25, 0.35, 0.5):
                     self.auto.check_stop()
                     self.auto.wait(wait_ms)
                     current_feat = self.screen.grab_region(px1, py1, px2, py2)
@@ -749,15 +791,17 @@ class WorkflowEngine:
                 )
 
                 # 异步路径: 现在 (上架已完成, 页面已刷新) 再取 OCR 结果,
-                # 这段时间 OCR 线程基本已经跑完了, timeout 给 1.5s 兜底.
+                # 这段时间 OCR 线程基本已经跑完了. timeout 抬到 3.5s 兜底
+                # — 1.5s 偶尔不够 RapidOCR 首次推理 + 复杂图标的耗时,
+                # 命中 timeout 会导致 name/收入 fallback 到坐标占位串.
                 if info is None:
                     try:
-                        info = ocr_future.result(timeout=1.5)
+                        info = ocr_future.result(timeout=3.5)
                     except Exception:
                         info = {"name": "", "income": 0}
 
                 record = ListingRecord(
-                    index=record_idx,
+                    index=len(self._listing_records) + 1,
                     name=info["name"] or f"R{item['row']}C{item['col']}",
                     income=info["income"],
                     box_name=box_name,
@@ -769,12 +813,16 @@ class WorkflowEngine:
 
                 listed += 1
                 self._listed_count += 1
-                self._progress(self._listed_count, max_slots)
+                # 进度条用本轮容量为分母 (而不是全局 max_slots), 这样:
+                #   - OCR 探测到只剩 5 槽时, 上完进度条到 100% 而不是 33%
+                #   - GUI 体感更准确
+                round_listed = self._listed_count - round_listed_start
+                self._progress(round_listed, progress_total)
 
                 income_str = f" | 预期收入: {record.income:,}" if record.income else ""
                 self._status(
                     f"  ✓ [{record.name}] "
-                    f"({self._listed_count}/{max_slots}){income_str}"
+                    f"({round_listed}/{progress_total}){income_str}"
                 )
 
                 listed_this_scan = True
