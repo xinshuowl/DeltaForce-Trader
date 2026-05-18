@@ -25,12 +25,12 @@
 ## 演示
 
 <p align="center">
-  <img src="docs/screenshots/demo.gif" alt="一键上架演示" width="720"/>
+  <video src="https://github.com/xinshuowl/DeltaForce-Trader/releases/download/v1.1.0/demo.mp4" controls width="720" muted loop autoplay playsinline>
+    您的环境不支持嵌入视频, 可<a href="https://github.com/xinshuowl/DeltaForce-Trader/releases/download/v1.1.0/demo.mp4">点此下载查看</a>.
+  </video>
   <br/>
-  <em>实际录屏画面 · 30 秒上完整箱 17 件道具 · 合计预期收入 1,200,000 哈夫币</em>
+  <em>实际录屏画面 · 一键挂上整箱非绑定道具 · 收入自动累计 · 全程无人值守</em>
 </p>
-
-> _GIF / 截图占位中。请按 [`docs/screenshots/README.md`](docs/screenshots/README.md) 的指引补图。_
 
 ### 功能截图
 
