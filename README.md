@@ -6,12 +6,57 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)](https://github.com/xinshuowl/DeltaForce-Trader/releases)
 [![Python](https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/GUI-PyQt5-41cd52?logo=qt&logoColor=white)](https://riverbankcomputing.com/software/pyqt/)
+[![Stars](https://img.shields.io/github/stars/xinshuowl/DeltaForce-Trader?style=social)](https://github.com/xinshuowl/DeltaForce-Trader/stargazers)
 
-> **DELTA FORCE TRADER** — 一键把仓库里的非绑定道具批量上架到交易行，
-> 也能一键下架已上架的道具。基于 ML 模型识别 + 多层去重，**不会反复点同一道具**。
+[中文](./README.md) · [English](./README_EN.md)
 
-支持品质 / 分类筛选、多箱子轮询挂机、坐标可视化校准。
-适合赚哈夫币挂机自动化、批量出货、清空仓库等场景。
+> **手动上架一仓库要 30 分钟？这工具 3 分钟搞定。**
+> 一键把仓库里的非绑定道具批量挂上交易行，挂满 15 槽后自动等成交、下架、整理仓库、循环重启 — 全程无人值守。
+
+支持品质 / 分类精确筛选、ML 模型识别、多箱子轮询挂机。
+适合赚哈夫币挂机自动化、批量清仓、刷交易行手续费日活。
+
+[**下载预编译 exe**](https://github.com/xinshuowl/DeltaForce-Trader/releases/latest) · [**视频演示**](https://space.bilibili.com/13591468) · [**QQ 交流群: 290101314**](#反馈与交流)
+
+> 如果这个工具帮你省了时间，**请点右上角 ⭐ Star 支持一下** — 是作者持续更新的最大动力！
+
+---
+
+## 演示
+
+<p align="center">
+  <img src="docs/screenshots/demo.gif" alt="一键上架演示" width="720"/>
+  <br/>
+  <em>实际录屏画面 · 30 秒上完整箱 17 件道具 · 合计预期收入 1,200,000 哈夫币</em>
+</p>
+
+> _GIF / 截图占位中。请按 [`docs/screenshots/README.md`](docs/screenshots/README.md) 的指引补图。_
+
+### 功能截图
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/main.png" alt="主界面" width="380"/><br/><em>主控制面板 · 一键启停 + 实时日志</em></td>
+    <td align="center"><img src="docs/screenshots/filter.png" alt="筛选设置" width="380"/><br/><em>品质 / 分类 / 箱子三轴筛选</em></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/calibrate.png" alt="坐标校准" width="380"/><br/><em>30+ 项坐标可视化校准</em></td>
+    <td align="center"><img src="docs/screenshots/review.png" alt="ML 标注审核" width="380"/><br/><em>ML 模型在线审核 + 一键重训</em></td>
+  </tr>
+</table>
+
+---
+
+## 为什么选择这个项目
+
+| 痛点 | 别的脚本 | 本项目 |
+|------|---------|---------|
+| 反复点同一把枪不同部位 | ❌ 常见 bug | ✅ 连通域合并彻底解决 |
+| 跨页跳过已处理物品 | ❌ 只看位置易出错 | ✅ 名字 + 图像指纹 + 位置三层兜底 |
+| 翻页过早漏扫物品 | ❌ 单次判定 | ✅ 双重底部确认 + 翻页前二次验证 |
+| 适配自己的分辨率 | ❌ 改代码 | ✅ GUI 30+ 项可视化校准 |
+| ML 不准了怎么办 | ❌ 重装/弃用 | ✅ 内置「审核标注」一键重训 |
+| 收入统计 | ❌ 没有 | ✅ 自动累计 + 扣手续费保证金 |
 
 > **快速下载 →** [前往最新 Release 下载预编译 exe](https://github.com/xinshuowl/DeltaForce-Trader/releases/latest)（每次推送 `vX.Y.Z` 标签时自动构建）
 

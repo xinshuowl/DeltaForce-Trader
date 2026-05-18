@@ -1,0 +1,90 @@
+name: 🐛 Bug 反馈
+description: 报告一个软件运行中遇到的 bug
+title: "[Bug] "
+labels: ["bug", "需要复现"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提交 bug 反馈！为了能快速定位问题，请尽量按下面的模板填完。
+        - 截图 / GIF 可以直接拖到正文里
+        - 完整日志请贴在 "运行日志" 部分（取 `logs/autoshop_YYYYMMDD_HHMMSS.log` 末 200 行即可）
+
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本
+      description: 看 "标题栏" 或 `git log -1` 的 commit hash
+      placeholder: "v1.1.0 或 commit 56318b6"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: "Windows 11 23H2 / Windows 10 22H2"
+    validations:
+      required: true
+
+  - type: input
+    id: resolution
+    attributes:
+      label: 屏幕分辨率 + DPI 缩放
+      placeholder: "2560×1440 / 150%"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scenario
+    attributes:
+      label: 触发场景
+      options:
+        - 上架流程 (Ctrl+1)
+        - 下架流程 (Ctrl+3)
+        - 挂机模式
+        - 坐标校准 / 截图拾取
+        - 道具采集
+        - ML 审核标注
+        - 软件启动 / 闪退
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 启动软件 → ...
+        2. 按 Ctrl+1 → 选 "挂机模式" → ...
+        3. 上架到第 5 件时 → ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 运行日志 (摘录末 200 行)
+      description: 把 `logs/autoshop_*.log` 末 200 行贴在这里 (会自动折叠)
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 截图 / GIF 可直接拖到这里。如有 `debug_*.png` 输出，欢迎一并附上。

@@ -1,0 +1,23 @@
+name: ❓ 使用问题 / 求助
+description: 软件使用上的疑问
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **使用类问题建议优先去 [Discussions](https://github.com/xinshuowl/DeltaForce-Trader/discussions) 提问**，可以更快得到社区成员回答。
+        本表单适合需要追踪修复的问题。
+
+  - type: textarea
+    id: question
+    attributes:
+      label: 问题描述
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: 已经查过的资料
+      placeholder: "README / 使用说明 tab / 现有 Issue 等"

@@ -1,0 +1,32 @@
+name: ✨ 功能建议
+description: 提一个新功能或改进点
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 当前流程哪里别扭 / 慢 / 不够智能？
+      placeholder: "例如: 上架到 10 件时偶尔会卡顿 2-3 秒"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 建议的方案
+      placeholder: "你希望软件怎么做？"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternative
+    attributes:
+      label: 你已经尝试过的替代方案
+      placeholder: "调过哪些参数？查过哪些 Issue / 文档？"
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 额外说明 / 截图

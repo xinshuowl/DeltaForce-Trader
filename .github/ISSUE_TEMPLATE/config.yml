@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/xinshuowl/DeltaForce-Trader/discussions
+    about: 使用上的问题 / 经验分享 / 闲聊 (氛围比 Issue 友好)
+  - name: 📱 QQ 交流群
+    url: https://github.com/xinshuowl/DeltaForce-Trader#反馈与交流
+    about: QQ 群 290101314 - 玩家实时交流, 作者活跃
+  - name: 🎬 B 站演示视频
+    url: https://space.bilibili.com/13591468
+    about: 看演示 / 关注最新更新
