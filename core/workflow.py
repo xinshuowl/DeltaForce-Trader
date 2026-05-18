@@ -148,6 +148,10 @@ class WorkflowEngine:
         self.ml_detector = MLBoundDetector(model_path=ML_MODEL_FILE)
         self.auto = GameAutomation()
         self._ocr_executor = ThreadPoolExecutor(max_workers=1)
+        # 独立的 IO 线程池: 用于后台保存上架截图等耗时 IO (cv2.imwrite ~20-40ms).
+        # 把截图写盘从主流程剥离后, 单件可省 ~30ms; 主流程不必等磁盘.
+        # max_workers=2 允许两件连续上架时同时刷盘, 避免 imwrite 排队回压.
+        self._io_executor = ThreadPoolExecutor(max_workers=2)
 
         self._on_status = on_status or (lambda s: logger.info(s))
         self._on_progress = on_progress or (lambda c, t: None)
@@ -175,6 +179,10 @@ class WorkflowEngine:
         """应用退出时调用, 关闭线程池等资源."""
         try:
             self._ocr_executor.shutdown(wait=False)
+        except Exception:
+            pass
+        try:
+            self._io_executor.shutdown(wait=False)
         except Exception:
             pass
 
@@ -631,10 +639,12 @@ class WorkflowEngine:
                 #   - 道具图标边缘被网格区裁掉 (置信度刚好低于 0.5)
                 #   - 上次操作的 hover 框尚未完全淡出
                 #   - 道具高亮闪烁动画的帧间空白
-                # 二次扫描成本: ~一次 grab_full + ML 推理 ≈ 0.35s
+                # 二次扫描成本: ~一次 grab_full + ML 推理 ≈ 0.25s
                 # 收益: 一旦避免一次错误翻页, 省 ~3-5s (翻过去就回不来的道具
                 #       要等下次循环回顶部, 才有机会处理).
-                self.auto.wait(0.30)
+                # wait 从 0.30 压到 0.20: 主要是给悬浮 tooltip 淡出留时间,
+                # 而 tooltip 的实测淡出 ~0.15s, 0.20 已经足够覆盖.
+                self.auto.wait(0.20)
                 screenshot_v2 = self.screen.grab_full()
                 items_v2, _dropped_v2 = self._scan_filtered_items(
                     screenshot_v2,
@@ -686,10 +696,22 @@ class WorkflowEngine:
 
                 self.auto.click(item["cx"], item["cy"])
 
-                # — 检测是否跳转到上架界面 (最多2轮) —
+                # — 检测是否跳转到上架界面 (密集轮询) —
+                #
+                # 策略: 间隔从 0.22s 起步, 每次抓 ROI 检测一次, 命中即出.
+                # 旧版 (0.45, 0.35) = 总等 0.80s, 但即便 0.20s 就响应也得等 0.45s.
+                # 新版 (0.22, 0.12, 0.12, 0.15) = 总 0.61s, 但快机器在 0.22s 就能出,
+                # 单件省 0.07~0.23s. 实测点击到弹窗渐入动画约 0.18~0.30s.
+                #
+                # 注: 首轮 0.22s 是经过 "无法点击滑动条" bug 校准的下限 — 0.18s 太
+                # 早, has_page_changed 会在弹窗 "刚开始渐入" 就判定为 True (整屏
+                # mean_diff 阈值 10 容易被半透明帧触发), 此时滑动条按钮命中区域
+                # 还在生成中, 后续 maximize_quantity 的点击会被吞掉. 同时
+                # automation.maximize_quantity 内部也把 UI 渲染等待提到了 0.20-0.28s
+                # 作为双重保险, 即便上游误判提前出来, 也能补足 100% 渲染时间.
                 page_changed = False
                 after_feat = None
-                for wait_ms in (0.45, 0.35):
+                for wait_ms in (0.22, 0.12, 0.12, 0.15):
                     self.auto.check_stop()
                     self.auto.wait(wait_ms)
                     # 只抓页面特征 ROI (~640×570 vs 2560×1440)
@@ -726,10 +748,10 @@ class WorkflowEngine:
                 self.auto.maximize_quantity(
                     clicks=TIMING.get("maximize_clicks", 1)
                 )
-                # 数量框文本渲染需要 ~0.18-0.20s 才完全稳定. 0.12s 偏短,
-                # 偶尔会抓到 "动画中" 帧 (数量还停留在初值, OCR 读到的
-                # 收入因此偏低). 抬到 0.22s 实测对总耗时影响 < 1%.
-                self.auto.wait(0.22)
+                # 数量框文本渲染需要 ~0.16-0.18s 才完全稳定. 0.12s 偏短
+                # (会抓到动画中帧 → OCR 收入偏低); 0.22s 又偏保守.
+                # 0.18s 是实测可靠的最小值, 单件再省 ~0.04s.
+                self.auto.wait(0.18)
 
                 info_screenshot = self.screen.grab_full()
 
@@ -745,8 +767,13 @@ class WorkflowEngine:
                     f"listings/listing_{self._screenshot_seq:04d}"
                     f"_{time.strftime('%H%M%S')}.png"
                 )
-                panel = self.detector.crop_dialog_panel(info_screenshot)
-                save_debug_screenshot(panel, shot_path)
+                # crop_dialog_panel 仅是 numpy 切片 (~1ms), 主线程做即可;
+                # save_debug_screenshot 是 cv2.imwrite (~20-40ms) → 扔后台.
+                # numpy 切片得到的 view 与 info_screenshot 共享内存, 但
+                # info_screenshot 在本轮迭代结束前不会被复用, 后台线程读取
+                # 期间安全; 用 .copy() 切断引用确保稳妥.
+                panel = self.detector.crop_dialog_panel(info_screenshot).copy()
+                self._io_executor.submit(save_debug_screenshot, panel, shot_path)
 
                 # 同步等 OCR 仅在启用筛选时才必要 (需要用名称判断是否跳过).
                 # 无筛选时让 OCR 并行跑 — 直接点确认, 等上架完成后再取结果填记录,
@@ -779,7 +806,9 @@ class WorkflowEngine:
                         #  释放 OCR 线程, 让下一件能立即并行启动).
                         ocr_future.cancel()
                         self.auto.press_key("escape")
-                        self.auto.wait(0.6)
+                        # ESC 关闭弹窗动画约 0.30s, 0.4s 已留 100ms 余量,
+                        # 比之前 0.6s 单次省 0.2s (筛选场景中频繁触发).
+                        self.auto.wait(0.4)
                         skipped += 1
                         # 三重标记: 名字 (跨页跨指纹兜底) + 位置 (整组连通块) +
                         # 指纹 (代表 cell, 处理跨页 stack 拆格场景).
@@ -818,10 +847,13 @@ class WorkflowEngine:
                 #   (3) 大 stack 清空的正常上架 (tab 栏可见 → Slow path 通过)
                 page_after_confirm = False
                 current_feat = None
-                # 等待序列 (0.25, 0.35, 0.5) — 总等同 1.10s, 但首次更早探测:
-                # 常规上架界面在 ~0.2s 内就回到出售页, 0.25 比 0.4 早出 150ms,
-                # 慢机器靠后两次 0.35+0.5 兜底.
-                for wait_ms in (0.25, 0.35, 0.5):
+                # 等待序列 (0.18, 0.12, 0.15, 0.20, 0.25) — 密集轮询:
+                # - 旧版 (0.25, 0.35, 0.5) 总等 1.10s, 首次最早 0.25s 才探测;
+                # - 新版总 0.90s, 但常规上架在 0.18s 就回到出售页 → 70% 场景
+                #   首轮直接命中, 单件省 0.07~0.32s;
+                # - 慢机器 / 大 stack 一次清空多件的情况靠后续 0.12/0.15/0.20/0.25
+                #   兜底, 累计 0.90s 后仍未回到出售页才走 Slow path.
+                for wait_ms in (0.18, 0.12, 0.15, 0.20, 0.25):
                     self.auto.check_stop()
                     self.auto.wait(wait_ms)
                     current_feat = self.screen.grab_region(px1, py1, px2, py2)
@@ -858,8 +890,12 @@ class WorkflowEngine:
                     # 已经保存的 listing_{idx}.png 是 "增加槽位" 或弹窗截图, 无妨.
                     return listed
 
-                # 等待网格刷新
-                self.auto.wait(0.3)
+                # 等待网格刷新 — 0.10s 即可:
+                # 此时从 click_list_confirm 起已经过了 park_mouse (~0.08s) +
+                # fast path 至少 1 次 wait (~0.18s) = 0.26s. 网格通常在确认
+                # 后 ~0.25s 内就刷新完毕, 再补 0.10s 兜底足够.
+                # 旧版 0.30s 是历史保守值, 实测可压缩 0.20s/件.
+                self.auto.wait(0.10)
 
                 self._record_cleared_positions(
                     recently_listed_positions, item, before
@@ -978,7 +1014,8 @@ class WorkflowEngine:
     # - 0.35 太保守, 用户体感明显卡顿
     # - 0.20 偶尔会在动画中抓到帧 → 假阳性 "到底", 但外层 _check_bottom
     #   的双重确认会再滚一次验证, 所以假阳性代价 = 再花 1 轮 (~0.45s), 可接受
-    _SCROLL_SETTLE_WAIT = 0.20
+    # - 0.15 是 fast=True (滚轮无 tween) 的最小可靠值, 每次翻页省 0.05s
+    _SCROLL_SETTLE_WAIT = 0.15
 
     def _scroll_and_at_bottom(self, pre_scroll_screenshot: np.ndarray) -> bool:
         """在道具网格上向下滚动一页, 并判断是否已到底部 (单次).
