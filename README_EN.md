@@ -25,11 +25,13 @@ Perfect for Haff-coin grinding, bulk inventory clearing, daily marketplace activ
 ## Demo
 
 <p align="center">
-  <a href="https://github.com/xinshuowl/DeltaForce-Trader/releases/download/v1.1.0/demo.mp4" title="Click to play demo video (4.5 MB / 39s)">
-    <img src="docs/screenshots/demo_poster.jpg" alt="Click to play demo video" width="720"/>
-  </a>
-  <br/>
-  <strong>▶️ Click the cover above to play the full demo video</strong> (4.5 MB / 39s)
+  <video src="https://github.com/user-attachments/assets/62b36629-35fc-45ed-bae7-3edd5480f533"
+         poster="docs/screenshots/demo_poster.jpg"
+         width="720"
+         controls
+         preload="metadata">
+    Your renderer does not support embedded video. <a href="https://github.com/xinshuowl/DeltaForce-Trader/releases/download/v1.1.0/demo.mp4">Download here</a>.
+  </video>
   <br/>
   <em>Live screen capture · One-click bulk listing of all non-bound items · Revenue auto-accumulated · Fully unattended</em>
 </p>

@@ -25,11 +25,13 @@
 ## 演示
 
 <p align="center">
-  <a href="https://github.com/xinshuowl/DeltaForce-Trader/releases/download/v1.1.0/demo.mp4" title="点击播放完整演示视频 (4.5 MB / 39s)">
-    <img src="docs/screenshots/demo_poster.jpg" alt="点击播放演示视频" width="720"/>
-  </a>
-  <br/>
-  <strong>▶️ 点击上方封面图播放完整演示视频</strong> (4.5 MB / 39s)
+  <video src="https://github.com/user-attachments/assets/62b36629-35fc-45ed-bae7-3edd5480f533"
+         poster="docs/screenshots/demo_poster.jpg"
+         width="720"
+         controls
+         preload="metadata">
+    您的环境不支持嵌入视频, 可<a href="https://github.com/xinshuowl/DeltaForce-Trader/releases/download/v1.1.0/demo.mp4">点此下载查看</a>.
+  </video>
   <br/>
   <em>实际录屏画面 · 一键挂上整箱非绑定道具 · 收入自动累计 · 全程无人值守</em>
 </p>
